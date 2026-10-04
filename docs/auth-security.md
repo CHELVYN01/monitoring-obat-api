@@ -1,6 +1,8 @@
 # Auth & Keamanan
 
-**Status:** belum diimplementasikan. Ini data kesehatan (UU PDP), jadi perlakukan sebagai prioritas.
+**Status:** sebagian besar **sudah diimplementasikan** (token JWT + refresh dirotasi, role guard deny-by-default, throttle, helmet, validasi, audit untuk perubahan data). Belum: audit login gagal, audit akses foto (modul uploads belum ada), Sentry, dan keputusan cara admin membawa token (lihat bagian bawah). Ini data kesehatan (UU PDP), jadi perlakukan sebagai prioritas.
+
+Token dikirim sebagai JSON dan dipakai lewat header `Authorization: Bearer`. Cookie httpOnly untuk admin belum diputuskan.
 
 ## Token
 

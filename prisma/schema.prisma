@@ -1,0 +1,158 @@
+// Skema database. Sumber desain: Blueprint.md bagian 5 + keputusan rawat inap/rawat jalan.
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  OFFICER
+  CAREGIVER
+}
+
+enum TaskStatus {
+  PENDING
+  GIVEN
+  REFUSED
+  MISSED
+  VERIFIED
+  REJECTED
+}
+
+/// Rawat inap (di fasilitas) atau rawat jalan (dirawat di rumah).
+enum CareType {
+  INPATIENT
+  OUTPATIENT
+}
+
+/// Staf fasilitas (banyak pasien rawat inap) atau keluarga pasien rawat jalan.
+enum CaregiverType {
+  STAFF
+  FAMILY
+}
+
+/// Hasil yang dilaporkan penjaga dari HP.
+enum LogResult {
+  GIVEN
+  REFUSED
+}
+
+model User {
+  id            String         @id @default(uuid())
+  name          String
+  email         String         @unique
+  passwordHash  String
+  role          Role
+  /// Hanya terisi untuk role CAREGIVER.
+  caregiverType CaregiverType?
+  phone         String?
+  pushToken     String?
+  isActive      Boolean        @default(true)
+  /// Terakhir kali HP penjaga sinkron (diisi oleh sync/push dan sync/pull).
+  lastSyncAt    DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  caregiverTasks MedicationTask[] @relation("Caregiver")
+  officerTasks   MedicationTask[] @relation("Officer")
+  verifiedTasks  MedicationTask[] @relation("Verifier")
+  logs           MedicationLog[]
+  refreshTokens  RefreshToken[]
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  /// Hash SHA-256 dari token; token asli tidak pernah disimpan.
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Patient {
+  id        String           @id @default(uuid())
+  name      String
+  careType  CareType         @default(INPATIENT)
+  /// Rawat inap: kamar.
+  room      String?
+  /// Rawat jalan: alamat rumah (data pribadi).
+  address   String?
+  /// Kontak keluarga.
+  phone     String?
+  notes     String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  tasks     MedicationTask[]
+}
+
+model MedicationTask {
+  id          String     @id @default(uuid())
+  patientId   String
+  caregiverId String
+  officerId   String
+  medicine    String
+  dose        String
+  scheduledAt DateTime
+  /// Batas waktu sebelum dianggap MISSED.
+  dueUntil    DateTime
+  status      TaskStatus @default(PENDING)
+  notes       String?
+  /// Catatan petugas saat verifikasi / penolakan.
+  verifyNote  String?
+  verifiedAt  DateTime?
+  verifiedById String?
+  createdAt   DateTime   @default(now())
+  /// Dipakai sebagai cursor sync pull; naikkan pada setiap perubahan yang perlu sampai ke HP.
+  updatedAt   DateTime   @updatedAt
+
+  patient   Patient         @relation(fields: [patientId], references: [id])
+  caregiver User            @relation("Caregiver", fields: [caregiverId], references: [id])
+  officer   User            @relation("Officer", fields: [officerId], references: [id])
+  verifier  User?           @relation("Verifier", fields: [verifiedById], references: [id])
+  logs      MedicationLog[]
+
+  @@index([caregiverId, updatedAt])
+  @@index([status, dueUntil])
+  @@index([patientId, scheduledAt])
+  @@index([scheduledAt])
+}
+
+model MedicationLog {
+  /// UUID dari HP (kunci idempotensi).
+  id          String    @id
+  taskId      String
+  caregiverId String
+  result      LogResult
+  /// Waktu kejadian menurut HP.
+  takenAt     DateTime
+  syncedAt    DateTime  @default(now())
+  photoKey    String?
+  note        String?
+
+  task      MedicationTask @relation(fields: [taskId], references: [id])
+  caregiver User           @relation(fields: [caregiverId], references: [id])
+
+  @@index([taskId])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  actorId   String
+  action    String
+  entity    String
+  entityId  String
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([actorId, createdAt])
+}

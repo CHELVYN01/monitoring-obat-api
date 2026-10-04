@@ -1,6 +1,6 @@
 # Arsitektur API
 
-**Status:** scaffold (hanya `AppModule`). Isi di bawah adalah rencana.
+**Status:** modul `prisma`, `audit`, `auth`, `users`, `patients`, `tasks`, `reports`, `health` sudah ada. Modul `sync`, `uploads`, `notifications` dan job terjadwal `MISSED` belum.
 
 ## Peran API dalam sistem
 
@@ -15,7 +15,7 @@ Admin web              ──HTTPS──►   │
 - Foto **tidak** melewati API; klien upload langsung ke storage lewat presigned URL.
 - Mobile menulis lokal dulu; API menerima hasil lewat `sync/push` dan menyajikan perubahan lewat `sync/pull`.
 
-## Modul (rencana, di `src/`)
+## Modul (di `src/`; yang belum ada ditandai)
 
 | Modul | Tanggung jawab |
 |---|---|
@@ -24,9 +24,10 @@ Admin web              ──HTTPS──►   │
 | `users` | CRUD akun (Admin) |
 | `patients` | CRUD pasien |
 | `tasks` | Mandat obat, verifikasi bukti |
-| `sync` | `pull` dan `push` untuk mobile, idempoten |
-| `uploads` | Presigned PUT/GET URL |
-| `notifications` | Push Expo saat tugas baru |
+| `sync` *(belum)* | `pull` dan `push` untuk mobile, idempoten |
+| `uploads` *(belum)* | Presigned PUT/GET URL |
+| `notifications` *(belum)* | Push Expo saat tugas baru |
+| `audit` | `AuditService` global, menulis ke `AuditLog` |
 | `reports` | Statistik kepatuhan, data ekspor |
 | `health` | `GET /health` |
 
@@ -35,7 +36,10 @@ Tiap modul: `*.module.ts`, `*.controller.ts` (tipis, hanya HTTP), `*.service.ts`
 ## Konvensi
 
 - **ESM:** import relatif wajib berekstensi `.js`, mis. `import { AppModule } from './app.module.js'`.
-- **Validasi:** `ValidationPipe` global dengan `whitelist: true`, `forbidNonWhitelisted: true`, `transform: true`; semua input lewat DTO `class-validator`.
+- **Validasi:** `ValidationPipe` global (`src/setup.ts`) dengan `whitelist: true`, `forbidNonWhitelisted: true`, `transform: true`; semua input lewat DTO `class-validator`.
+- **Prisma 7:** client digenerate ke `src/generated/prisma` (diabaikan git; jalankan `bun run db:generate`), memakai driver adapter `@prisma/adapter-pg`. Import dari `../generated/prisma/client.js`.
+- **Guard global (urutan):** `ThrottlerGuard` → `JwtAuthGuard` → `RolesGuard`. Endpoint non-publik tanpa `@Roles` ditolak (deny by default).
+- **Respons tugas** dibentuk `toTaskView()` (rata, tanpa kunci objek foto).
 - **ID:** UUID. Untuk `MedicationLog` UUID dibuat klien (kunci idempotensi); lainnya `@default(uuid())`.
 - **Waktu:** simpan UTC (`DateTime`), kirim ISO 8601. `updatedAt` dipakai sebagai cursor sync.
 - **Error:** pakai exception bawaan Nest (`NotFoundException`, `ForbiddenException`, ...); jangan membocorkan detail internal ke klien.
